@@ -1,0 +1,8 @@
+GitHub Connection Test
+======================
+
+This file was created to test the GitHub connection.
+Timestamp: 2025-10-30
+
+If you can see this file pushed to the remote repository,
+the connection is working correctly!
