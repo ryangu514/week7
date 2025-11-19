@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>London Police Archive System</title>
+
+  <!-- Retro terminal font -->
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #050505;
+      --bg-panel: #0c0c0c;
+      --border-soft: #3d3d3d;
+      --border-strong: #6f6f6f;
+      --text-main: #e5e5e5;
+      --text-muted: #8c8c8c;
+      --row-hover: #1a1a1a;
+      --row-active: #232323;
+      --row-played: #2c2c2c;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: radial-gradient(circle at center, #111 0, #000 70%);
+      color: var(--text-main);
+      font-family: "VT323", monospace;
+      font-size: 20px;
+      line-height: 1.4;
+      position: relative;
+      perspective: 1000px;
+    }
+
+    /* 扫描线 / 噪点 / CRT 效果 */
+    @keyframes scanMove {
+      from { background-position: 0 0; }
+      to   { background-position: 0 6px; }
+    }
+
+    @keyframes noiseShift {
+      0%   { transform: translate3d(0,0,0); opacity: 0.35; }
+      25%  { transform: translate3d(0,0,0); opacity: 0.32; }
+      50%  { transform: translate3d(0,0,0); opacity: 0.38; }
+      75%  { transform: translate3d(0,0,0); opacity: 0.33; }
+      100% { transform: translate3d(0,0,0); opacity: 0.35; }
+    }
+
+    @keyframes flicker {
+      0%   { opacity: 0.90; }
+      2%   { opacity: 0.85; }
+      4%   { opacity: 0.95; }
+      19%  { opacity: 0.88; }
+      21%  { opacity: 0.98; }
+      23%  { opacity: 0.92; }
+      80%  { opacity: 0.87; }
+      83%  { opacity: 0.96; }
+      87%  { opacity: 0.91; }
+      100% { opacity: 0.90; }
+    }
+
+    @keyframes rgbShift {
+      0%   { text-shadow: 0.3px 0 0 rgba(255,0,0,0.4), -0.3px 0 0 rgba(0,255,255,0.4); }
+      50%  { text-shadow: -0.3px 0 0 rgba(255,0,0,0.4), 0.3px 0 0 rgba(0,255,255,0.4); }
+      100% { text-shadow: 0.3px 0 0 rgba(255,0,0,0.4), -0.3px 0 0 rgba(0,255,255,0.4); }
+    }
+
+    @keyframes boot {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes crtPulse {
+      0%,100% { filter: brightness(0.96); }
+      50%     { filter: brightness(1.04); }
+    }
+
+    @keyframes blink {
+      0%,100% { opacity: 0.35; }
+      50%     { opacity: 0.9; }
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,0.15) 0px,
+        rgba(0,0,0,0.15) 2px,
+        transparent 2px,
+        transparent 3px,
+        rgba(255,255,255,0.05) 3px,
+        rgba(255,255,255,0.05) 4px,
+        transparent 4px,
+        transparent 6px
+      );
+      opacity: 0.7;
+      z-index: 99999;
+      animation: scanMove 0.15s linear infinite;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        radial-gradient(circle at 20% 20%, rgba(255,255,255,0.25) 0, transparent 35%),
+        radial-gradient(circle at 80% 60%, rgba(255,255,255,0.20) 0, transparent 40%),
+        radial-gradient(circle at 30% 80%, rgba(255,255,255,0.18) 0, transparent 45%),
+        radial-gradient(circle at 60% 10%, rgba(255,255,255,0.15) 0, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.12) 0, transparent 50%),
+        repeating-radial-gradient(circle at 50% 50%, transparent 0, transparent 1px, rgba(255,255,255,0.08) 1px, rgba(255,255,255,0.08) 2px);
+      mix-blend-mode: overlay;
+      opacity: 0.6;
+      z-index: 99998;
+      animation: noiseShift 0.3s steps(8) infinite;
+    }
+
+    .wrap::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.3) 0px, transparent 1px, transparent 3px),
+        repeating-linear-gradient(90deg, rgba(0,0,0,0.3) 0px, transparent 1px, transparent 3px);
+      opacity: 0.4;
+      z-index: 99997;
+      mix-blend-mode: multiply;
+    }
+
+    .wrap::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.5) 100%),
+        linear-gradient(180deg, rgba(0,0,0,0.1) 0%, transparent 50%, rgba(0,0,0,0.1) 100%);
+      z-index: 99996;
+      animation: flicker 4s infinite;
+    }
+
+    .wrap {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    #terminal {
+      width: 900px;
+      max-width: 96vw;
+      background: var(--bg-panel);
+      border: 2px solid var(--border-strong);
+      border-radius: 14px;
+      padding: 20px 28px 24px;
+      box-shadow:
+        0 0 45px rgba(0,0,0,0.9),
+        inset 0 0 18px rgba(0,0,0,0.95),
+        0 0 80px rgba(100,200,255,0.15),
+        inset 0 0 60px rgba(100,200,255,0.08);
+      animation: boot 0.6s ease-out forwards, rgbShift 3s infinite alternate;
+      margin: auto;
+      opacity: 0;
+    }
+
+    .header-line {
+      margin-bottom: 12px;
+      font-size: 18px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .header-left div { white-space: nowrap; }
+
+    #restartBtn {
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-strong);
+      background: #101010;
+      color: var(--text-main);
+      font-family: "VT323", monospace;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #restartBtn:hover {
+      background: #181818;
+    }
+
+    h3 {
+      margin: 4px 0 2px;
+      font-size: 22px;
+      letter-spacing: 0.12em;
+      text-shadow:
+        0 0 10px rgba(229,229,229,0.5),
+        0 0 20px rgba(229,229,229,0.3),
+        0.5px 0 1px rgba(255,100,100,0.3),
+        -0.5px 0 1px rgba(100,255,255,0.3);
+    }
+
+    .logs-list {
+      margin-top: 6px;
+      border: 1px solid var(--border-soft);
+      border-radius: 10px;
+      background: #0a0a0a;
+      overflow: hidden;
+    }
+
+    .log-row {
+      background: #111;
+      border-bottom: 1px solid #242424;
+      padding: 6px 10px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: opacity 0.2s;
+    }
+
+    .log-row:hover { background: var(--row-hover); }
+    .log-row.active { background: var(--row-active); }
+    .log-row.played { background: var(--row-played); }
+    .log-row.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .log-label {
+      width: 40px;
+      margin-right: 10px;
+      color: var(--text-muted);
+    }
+
+    .log-title {
+      flex: 1;
+      text-align: left;
+    }
+
+    .checkmark {
+      width: 20px;
+      text-align: right;
+      opacity: 0;
+      color: var(--text-main);
+    }
+    .log-row.played .checkmark { opacity: 1; }
+
+    .small-help {
+      margin-top: 4px;
+      font-size: 16px;
+      color: var(--text-muted);
+    }
+
+    /* 这里开始是主布局：左图 + 右侧（文字+线索+指控） */
+    #playback {
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border-soft);
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    #imagePane {
+      flex: 0.9;
+      min-height: 200px;
+      background: #070707;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      box-shadow: inset 0 0 12px rgba(0,0,0,0.8);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #imagePane::before {
+      content: "[ SCENE IMAGE ]";
+      position: absolute;
+      top: 6px; left: 8px;
+      font-size: 14px;
+      color: var(--text-muted);
+      z-index: 2;
+    }
+
+    #imagePane::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: rgba(40,40,40,0.2);
+      mix-blend-mode: multiply;
+      z-index: 1;
+    }
+
+    #sceneImage {
+      width: 100%;
+      margin-top: 22px;
+      filter:
+        grayscale(100%)
+        contrast(1.15)
+        brightness(0.95)
+        sepia(0.12)
+        blur(0.3px);
+      box-shadow:
+        0 0 20px rgba(255,255,255,0.1),
+        inset 0 0 40px rgba(0,0,0,0.3);
+      position: relative;
+      z-index: 0;
+    }
+
+    /* 右侧整列容器 */
+    #rightPane {
+      flex: 1.4;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 200px;
+    }
+
+    #textPane {
+      min-height: 160px;
+      padding: 8px 10px;
+      background: #0b0b0b;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      box-shadow: inset 0 0 12px rgba(0,0,0,0.8);
+      font-size: 18px;
+      white-space: pre-wrap;
+      color: #e2e2e2;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+      position: relative;
+      animation: crtPulse 2.4s infinite ease-in-out;
+      flex-shrink: 0;
+    }
+
+    #textPane:hover { background: #0d0d0d; }
+
+    #skipHint {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 14px;
+      color: #666;
+      opacity: 0.7;
+      animation: blink 1s infinite;
+    }
+
+    /* 线索放在右侧、文字下方 */
+    #clues {
+      padding-top: 6px;
+      border-top: 1px dashed var(--border-soft);
+      font-size: 18px;
+    }
+
+    /* 嫌疑块继续放在最下面，但还在右列里 */
+    #suspectSection {
+      margin-top: 6px;
+      padding: 10px 12px;
+      border: 2px solid var(--border-strong);
+      border-radius: 8px;
+      background: #0a0a0a;
+      box-shadow:
+        0 0 20px rgba(100,200,255,0.1),
+        inset 0 0 20px rgba(0,0,0,0.5);
+      display: none;
+    }
+
+    .suspectBtn {
+      padding: 6px 16px;
+      margin-right: 0;
+      border: 2px solid #4a4a4a;
+      border-radius: 6px;
+      background: linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%);
+      color: var(--text-main);
+      cursor: pointer;
+      font-family: "VT323", monospace;
+      font-size: 19px;
+      transition: all 0.2s;
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .suspectBtn:hover {
+      background: linear-gradient(180deg, #252525 0%, #151515 100%);
+      border-color: #6f6f6f;
+      box-shadow: 0 0 15px rgba(100,200,255,0.3);
+    }
+    .suspectBtn:disabled {
+      opacity: 0.45;
+      cursor: default;
+      box-shadow: none;
+    }
+
+    #resultMsg {
+      margin-top: 10px;
+      padding: 8px;
+      font-size: 18px;
+      color: var(--text-main);
+      background: #050505;
+      border-radius: 4px;
+      border-left: 3px solid var(--border-strong);
+      min-height: 20px;
+    }
+  </style>
+</head>
+
+<body>
+<!-- 额外噪点层 -->
+<div style="
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: url('data:image/svg+xml,%3Csvg viewBox=&quot;0 0 200 200&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;%3E%3Cfilter id=&quot;noise&quot;%3E%3CfeTurbulence type=&quot;fractalNoise&quot; baseFrequency=&quot;1.2&quot; numOctaves=&quot;5&quot; stitchTiles=&quot;stitch&quot;/%3E%3C/filter%3E%3Crect width=&quot;100%25&quot; height=&quot;100%25&quot; filter=&quot;url(%23noise)&quot; opacity=&quot;0.5&quot;/%3E%3C/svg%3E');
+  opacity: 0.35;
+  z-index: 99995;
+  mix-blend-mode: soft-light;
+"></div>
+
+<div class="wrap">
+  <div id="terminal">
+    <div class="header-line">
+      <div class="header-left">
+        <div>&gt; LONDON POLICE ARCHIVE SYSTEM</div>
+        <div>&gt; CASE FILE: WHITECHAPEL_1888</div>
+        <div>&gt; STATUS: RESTORED</div>
+      </div>
+      <button id="restartBtn" onclick="restartCase()">&gt; RESTART CASE</button>
+    </div>
+
+    <h3>3 AUDIO LOGS AVAILABLE</h3>
+    <div>Select file to playback:</div>
+
+    <div class="logs-list">
+      <div class="log-row" onclick="playLog('A')" id="rowA">
+        <span class="log-label">[A]</span>
+        <span class="log-title">Detective_Log.wav</span>
+        <span class="checkmark">✔</span>
+      </div>
+      <div class="log-row" onclick="playLog('B')" id="rowB">
+        <span class="log-label">[B]</span>
+        <span class="log-title">Reporter_Record.wav</span>
+        <span class="checkmark">✔</span>
+      </div>
+      <div class="log-row" onclick="playLog('C')" id="rowC">
+        <span class="log-label">[C]</span>
+        <span class="log-title">Witness_Statement.wav</span>
+        <span class="checkmark">✔</span>
+      </div>
+    </div>
+
+    <div class="small-help">
+      • Click a file to play. Click text area to skip typing animation.
+    </div>
+
+    <!-- 左图 + 右列 -->
+    <div id="playback">
+      <div id="imagePane">
+        <img id="sceneImage" src="default_scene.png" alt="scene image">
+      </div>
+
+      <div id="rightPane">
+        <div id="textPane" onclick="skipTyping()">
+&gt; Select a log on the left to begin playback.
+        </div>
+
+        <div id="clues">
+          <strong>Unlocked Clues:</strong>
+          <ul id="clueList"></ul>
+        </div>
+
+        <div id="suspectSection">
+          <div style="margin-bottom: 8px; font-size: 19px; letter-spacing: 0.08em;">
+            <strong>&gt; SUBMIT ACCUSATION</strong>
+          </div>
+          <div style="margin-bottom: 6px; color: var(--text-muted); font-size: 17px;">
+            Select the suspect:
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="suspectBtn" onclick="checkSuspect('detective')">Detective</button>
+            <button class="suspectBtn" onclick="checkSuspect('reporter')">Reporter</button>
+            <button class="suspectBtn" onclick="checkSuspect('witness')">Witness</button>
+          </div>
+          <div id="resultMsg"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const logs = {
+    A: {
+      text:`[Detective Log - 3:05 AM]
+
+Arrived at scene at 3:05 AM.
+Body is leaning against the wall, but the posture is unnatural.
+
+Based on blood pattern analysis, she should have fallen forward,
+not positioned against the wall as she is now.
+
+No drag marks detected, movements were careful.
+This indicates someone repositioned the body.
+
+The killer must have been very close to her, and remained calm.`,
+      img: "detective.png",
+      clue: "Body posture is unnatural, indicating it was repositioned by someone."
+    },
+    B: {
+      text:`[Reporter Record - Claims 2:55 AM]
+
+I arrived around 2:55 AM.
+She was already sitting against the wall, just like in the photos later.
+
+I didn't get close, stayed at the alley entrance,
+only saw her silhouette from a distance.
+
+She appeared to be sitting facing the street,
+as if waiting for someone.`,
+      img: "reporter.png",
+      clue: "Reporter claims to only observe from distance at alley entrance, yet describes body's facing direction."
+    },
+    C: {
+      text:`[Witness Statement - Around 3:00 AM]
+
+I passed by that alley around 3 AM.
+
+I saw a man very close to her,
+close enough as if checking whether she was dead.
+
+He wasn't at the alley entrance,
+he was crouched right in front of her.
+
+I saw something in his hand reflecting light,
+looked like a metal pen.`,
+      img: "witness.png",
+      clue: "Witness saw man directly in front of the body, holding reflective metal object."
+    }
+  };
+
+  const defaultText = "> Select a log on the left to begin playback.";
+  let unlocked = [];
+  let isTyping = false;
+  let currentTimer = null;
+  let fullText = "";
+  let typingCallback = null;
+
+  function skipTyping() {
+    if (!isTyping || !currentTimer) return;
+    clearInterval(currentTimer);
+    currentTimer = null;
+    isTyping = false;
+
+    const textEl = document.getElementById("textPane");
+    textEl.textContent = fullText;
+
+    const hint = document.getElementById("skipHint");
+    if (hint) hint.remove();
+
+    if (typingCallback) {
+      typingCallback();
+      typingCallback = null;
+    }
+
+    ["A","B","C"].forEach(k => {
+      document.getElementById("row"+k).classList.remove("disabled");
+    });
+  }
+
+  function playLog(key) {
+    if (isTyping) return;
+
+    ["A","B","C"].forEach(k => {
+      const row = document.getElementById("row"+k);
+      row.classList.remove("active");
+      row.classList.add("disabled");
+      row.title = "Disabled during playback";
+    });
+
+    const currentRow = document.getElementById("row"+key);
+    currentRow.classList.remove("disabled");
+    currentRow.classList.add("active");
+
+    const log = logs[key];
+
+    const sceneImg = document.getElementById("sceneImage");
+    if (sceneImg) {
+      sceneImg.src = log.img;
+      sceneImg.alt = "scene image - " + key;
+    }
+
+    typeText(log.text, document.getElementById("textPane"), () => {
+      unlockClue(log.clue);
+      markPlayed(key);
+      ["A","B","C"].forEach(k => {
+        const row = document.getElementById("row"+k);
+        row.classList.remove("disabled");
+        row.title = "";
+      });
+    });
+  }
+
+  function markPlayed(k) {
+    document.getElementById("row"+k).classList.add("played");
+  }
+
+  function unlockClue(c) {
+    if (!unlocked.includes(c)) unlocked.push(c);
+
+    document.getElementById("clueList").innerHTML =
+      unlocked.map((v, i) => `<li>[${i+1}] ${v}</li>`).join("");
+
+    if (unlocked.length === 3) {
+      document.getElementById("suspectSection").style.display = "block";
+    }
+  }
+
+  function typeText(text, el, callback) {
+    if (currentTimer) {
+      clearInterval(currentTimer);
+    }
+
+    fullText = text;
+    typingCallback = callback;
+    isTyping = true;
+    el.textContent = "";
+    let i = 0;
+
+    const skipHint = document.createElement("div");
+    skipHint.id = "skipHint";
+    skipHint.textContent = "[Click to skip]";
+    el.appendChild(skipHint);
+
+    currentTimer = setInterval(() => {
+      el.textContent = text.substring(0, i);
+      i++;
+      if (i > text.length) {
+        clearInterval(currentTimer);
+        currentTimer = null;
+        isTyping = false;
+        const hint = document.getElementById("skipHint");
+        if (hint) hint.remove();
+        callback && callback();
+        typingCallback = null;
+      }
+    }, 40);
+  }
+
+  function checkSuspect(choice) {
+    document.querySelectorAll(".suspectBtn").forEach(b => b.disabled = true);
+    const result = document.getElementById("resultMsg");
+
+    if (choice === "reporter") {
+      result.innerHTML =
+        "&gt; <strong style='color: #7f7;'>CORRECT</strong><br>Only the reporter could describe the body position from the killer's perspective.";
+      result.style.borderLeftColor = "#7f7";
+    } else {
+      result.innerHTML =
+        "&gt; <strong style='color: #f77;'>INCORRECT</strong><br>The evidence does not support this accusation.";
+      result.style.borderLeftColor = "#f77";
+    }
+  }
+
+  function restartCase() {
+    if (isTyping && currentTimer) {
+      clearInterval(currentTimer);
+      currentTimer = null;
+      isTyping = false;
+    }
+
+    const sceneImg = document.getElementById("sceneImage");
+    if (sceneImg) {
+      sceneImg.src = "default_scene.png";
+      sceneImg.alt = "scene image";
+    }
+
+    const textEl = document.getElementById("textPane");
+    textEl.textContent = defaultText;
+
+    unlocked = [];
+    document.getElementById("clueList").innerHTML = "";
+
+    ["A","B","C"].forEach(k => {
+      const row = document.getElementById("row"+k);
+      row.classList.remove("active","played","disabled");
+      row.title = "";
+    });
+
+    const section = document.getElementById("suspectSection");
+    section.style.display = "none";
+    const result = document.getElementById("resultMsg");
+    result.textContent = "";
+    result.style.borderLeftColor = getComputedStyle(document.documentElement)
+      .getPropertyValue('--border-strong');
+
+    document.querySelectorAll(".suspectBtn").forEach(b => b.disabled = false);
+  }
+</script>
+</body>
+</html>
